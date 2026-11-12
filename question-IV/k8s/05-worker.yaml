@@ -1,0 +1,35 @@
+# INTERACTION ÉVÉNEMENTIELLE : les workers consomment la file Redis alimentée par l'API.
+# Même image que l'API, mais avec une autre commande. Pas de Service : personne ne les appelle.
+# Le champ "replicas" est volontairement absent : c'est KEDA (07-keda-scaledobject.yaml) qui
+# fixe le nombre de workers, de 0 à 6, selon le nombre d'événements en attente.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: etude-cas
+spec:
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      containers:
+        - name: worker
+          image: etude-cas:1.0
+          imagePullPolicy: IfNotPresent
+          command: ["python", "worker.py"]
+          envFrom:
+            - configMapRef:
+                name: app-config
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: REDIS_PASSWORD
+          resources:
+            requests: { cpu: 50m, memory: 48Mi }
+            limits: { cpu: 200m, memory: 96Mi }

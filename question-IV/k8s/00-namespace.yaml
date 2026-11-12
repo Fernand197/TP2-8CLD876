@@ -1,0 +1,5 @@
+# Un Namespace isole toutes les ressources de l'étude de cas (et permet de tout supprimer d'un coup).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: etude-cas

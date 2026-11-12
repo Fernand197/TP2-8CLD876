@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  type: NodePort
+  ports:
+    - port: 80          # port du Service à l'intérieur du cluster (ClusterIP:80)
+      targetPort: 80    # port du conteneur frontend
+      nodePort: 30080   # port ouvert sur le nœud (optionnel ; sinon choisi dans 30000-32767)
+  selector:
+    app: frontend

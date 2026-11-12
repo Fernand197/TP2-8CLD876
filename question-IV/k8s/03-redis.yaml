@@ -1,0 +1,70 @@
+# STOCKAGE PERSISTANT : Redis est une application AVEC état -> StatefulSet + volume persistant.
+# Le StatefulSet donne au pod une identité stable (redis-0) et lui rattache toujours le même volume.
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: etude-cas
+spec:
+  clusterIP: None            # Service "headless" : le DNS "redis" renvoie directement l'IP du pod redis-0
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: etude-cas
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      # GESTION DES EMPLACEMENTS : sur Minikube, le volume est un répertoire LOCAL d'un nœud.
+      # On épingle donc Redis sur le nœud principal pour qu'il retrouve toujours ses données.
+      # Dans le nuage, un volume réseau (EBS, Persistent Disk, Azure Disk) suit le pod d'un nœud
+      # à l'autre et cette contrainte devient inutile.
+      nodeSelector:
+        minikube.k8s.io/primary: "true"
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          # $(REDIS_PASSWORD) est remplacé par Kubernetes avec la variable d'environnement ci-dessous
+          args: ["--requirepass", "$(REDIS_PASSWORD)", "--appendonly", "yes"]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: REDIS_PASSWORD
+          ports:
+            - containerPort: 6379
+          volumeMounts:
+            - name: donnees
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "redis-cli -a \"$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 250m, memory: 128Mi }
+  # Un PersistentVolumeClaim est créé automatiquement pour chaque pod (donnees-redis-0).
+  # La StorageClass par défaut du cluster provisionne le PersistentVolume correspondant.
+  volumeClaimTemplates:
+    - metadata:
+        name: donnees
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 256Mi

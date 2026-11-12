@@ -1,0 +1,99 @@
+# DÉPLOIEMENT + MISES À JOUR + AUTO-RÉPARATION : API sans état, 3 réplicas.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: etude-cas
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api
+  # Mise à jour progressive sans interruption : on ajoute 1 nouveau pod, on attend qu'il soit prêt,
+  # puis on retire 1 ancien pod, et ainsi de suite.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      # GESTION DES EMPLACEMENTS : répartir les pods sur des nœuds différents, pour que la perte
+      # d'un nœud ne fasse disparaître qu'une partie des réplicas.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: api
+      containers:
+        - name: api
+          image: etude-cas:1.0
+          imagePullPolicy: IfNotPresent      # image construite localement dans Minikube
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: app-config             # toutes les clés du ConfigMap deviennent des variables
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: REDIS_PASSWORD
+          # Arrêt en douceur : avant de recevoir SIGTERM, le pod attend 5 s, le temps que kube-proxy
+          # le retire du Service. Sans cela, quelques requêtes échouent pendant une mise à jour.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "5"]
+          # requests = ce que l'ordonnanceur réserve sur le nœud ; base du calcul du HPA.
+          # limits   = plafond imposé par les cgroups du noyau.
+          resources:
+            requests: { cpu: 100m, memory: 64Mi }
+            limits: { cpu: 250m, memory: 128Mi }
+          # Prêt à recevoir du trafic ? Sinon le pod est retiré des points de terminaison du Service.
+          readinessProbe:
+            httpGet: { path: /ready, port: 8080 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          # Toujours vivant ? Sinon le kubelet redémarre le conteneur.
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+---
+# Pendant une maintenance volontaire (kubectl drain), Kubernetes garde toujours au moins 2 pods API.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api
+  namespace: etude-cas
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: api
+---
+# ÉQUILIBRAGE DE CHARGE + DÉCOUVERTE DE SERVICES : une adresse stable devant les pods "app=api".
+# - à l'intérieur du cluster : http://api (ou api.etude-cas.svc.cluster.local)
+# - à l'extérieur            : http://<IP d'un nœud>:30081
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: etude-cas
+spec:
+  type: NodePort
+  selector:
+    app: api
+  ports:
+    - port: 80
+      targetPort: 8080
+      nodePort: 30081

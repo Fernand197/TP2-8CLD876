@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          # [VOTRE_IMAGE_FRONTEND] -> image construite localement dans Minikube (voir scripts/02-deploy.sh)
+          image: tp-frontend:1.0
+          imagePullPolicy: Never     # l'image existe déjà dans Minikube, pas de téléchargement
+          env:
+            - name: DB_HOST
+              value: "mysql"         # nom du Service MySQL
+            - name: DB_PASSWORD
+              value: "password"
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5

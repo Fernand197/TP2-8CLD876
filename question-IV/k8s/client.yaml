@@ -1,0 +1,23 @@
+# Pod utilitaire : sert à envoyer des requêtes DEPUIS l'intérieur du cluster (curl http://api/...).
+# Cela fonctionne de la même façon sous Linux, Windows et macOS, sans tunnel.
+# C'est un Deployment pour qu'il soit recréé ailleurs si son nœud est évacué.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client
+  namespace: etude-cas
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: client
+  template:
+    metadata:
+      labels:
+        app: client
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: curl
+          image: curlimages/curl:8.10.1
+          command: ["sleep", "infinity"]

@@ -1,0 +1,31 @@
+# MONTÉE EN ÉCHELLE PILOTÉE PAR LES ÉVÉNEMENTS (KEDA) : le nombre de workers suit la longueur
+# de la file Redis, et non l'utilisation du processeur.
+#   - file vide            -> 0 worker (mise à zéro : aucune ressource consommée au repos)
+#   - événements en attente -> 1 worker par tranche de 5 événements, jusqu'à 6
+# KEDA interroge Redis toutes les 5 s, active le Deployment (0 -> 1), puis crée et alimente
+# un HorizontalPodAutoscaler qui gère la suite (1 -> 6).
+# Nécessite KEDA dans le cluster (installé par scripts/01-deploy.sh).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: worker
+  namespace: etude-cas
+spec:
+  scaleTargetRef:
+    name: worker                   # le Deployment à piloter
+  minReplicaCount: 0
+  maxReplicaCount: 6
+  pollingInterval: 5               # secondes entre deux lectures de la file
+  cooldownPeriod: 30               # secondes de file vide avant de revenir à 0
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 30
+  triggers:
+    - type: redis
+      metadata:
+        address: redis.etude-cas.svc.cluster.local:6379
+        listName: "file:taches"
+        listLength: "5"
+        passwordFromEnv: REDIS_PASSWORD     # lu dans les variables du conteneur worker (donc dans le Secret)

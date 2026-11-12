@@ -1,0 +1,12 @@
+# GESTION DE LA CONFIGURATION : les paramètres non sensibles sont sortis de l'image.
+# La même image peut ainsi tourner en dev, en test et en production avec des ConfigMaps différents.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: etude-cas
+data:
+  MESSAGE: "Bonjour depuis Kubernetes"
+  REDIS_HOST: "redis"          # nom du Service Redis -> découverte de services par DNS
+  REDIS_PORT: "6379"
+  DUREE_TRAITEMENT: "1"        # secondes de travail simulé par tâche (worker)

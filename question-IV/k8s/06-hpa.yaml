@@ -1,0 +1,25 @@
+# MONTÉE EN ÉCHELLE AUTOMATIQUE : entre 3 et 8 pods API selon l'utilisation moyenne du processeur.
+# Cible : 50 % de la "request" CPU (100m) -> au-delà de 50m en moyenne par pod, le HPA ajoute des pods.
+# Nécessite metrics-server (minikube addons enable metrics-server).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api
+  namespace: etude-cas
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api
+  minReplicas: 3
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 60     # redescend après 1 min de calme (5 min par défaut)

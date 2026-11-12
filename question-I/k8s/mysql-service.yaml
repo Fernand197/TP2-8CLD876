@@ -1,0 +1,11 @@
+# Service de type ClusterIP (par défaut) : MySQL n'est joignable QUE depuis l'intérieur du cluster,
+# via le nom DNS "mysql" (ou mysql.default.svc.cluster.local).
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+spec:
+  ports:
+    - port: 3306
+  selector:
+    app: mysql
